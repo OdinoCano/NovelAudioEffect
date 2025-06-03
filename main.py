@@ -4,6 +4,75 @@ from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit.circuit import Parameter
 
+def quantum_frqi_modulation(audio_data, sample_rate, intensity=0.5):
+    max_val = np.max(np.abs(audio_data))
+    if max_val == 0:
+        return audio_data
+    
+    audio_norm = audio_data.astype(np.float32) / max_val
+    chunk_size = 256  # 2^8 qubits de posición
+    num_chunks = (len(audio_norm) + chunk_size - 1) // chunk_size
+    processed = np.zeros(num_chunks * chunk_size)
+    
+    for chunk_idx in range(num_chunks):
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, len(audio_norm))
+        chunk = audio_norm[start:end]
+        
+        if len(chunk) < chunk_size:
+            padded_chunk = np.zeros(chunk_size)
+            padded_chunk[:len(chunk)] = chunk
+            chunk = padded_chunk
+        
+        # Paso 1: Mapeo a ángulos FRQI
+        normalized_chunk = (chunk + 1) / 2.0
+        theta = normalized_chunk * (np.pi / 2)
+        
+        # Paso 2: Construir estado FRQI
+        state_vector = np.zeros(2 * chunk_size, dtype=complex)
+        norm_factor = 1.0 / np.sqrt(chunk_size)
+        for i in range(chunk_size):
+            state_vector[i] = np.cos(theta[i]) * norm_factor
+            state_vector[chunk_size + i] = np.sin(theta[i]) * norm_factor
+        
+        # Paso 3: Operación cuántica (Hadamard en qubit de amplitud)
+        for i in range(chunk_size):
+            index0 = i
+            index1 = chunk_size + i
+            vec0 = state_vector[index0]
+            vec1 = state_vector[index1]
+            state_vector[index0] = (vec0 + vec1) / np.sqrt(2)
+            state_vector[index1] = (vec0 - vec1) / np.sqrt(2)
+        
+        # Paso 4: Decodificación y aplicación de intensidad
+        new_chunk = np.zeros(chunk_size)
+        for i in range(chunk_size):
+            p0 = np.abs(state_vector[i])**2
+            p1 = np.abs(state_vector[chunk_size + i])**2
+            total = p0 + p1
+            
+            if total < 1e-10:
+                cond_p1 = 0.5
+            else:
+                cond_p1 = p1 / total
+            
+            cond_p1 = np.clip(cond_p1, 0, 1)
+            new_theta = np.arcsin(np.sqrt(cond_p1))
+            new_normalized = new_theta / (np.pi / 2)
+            new_amp = 2 * new_normalized - 1
+            
+            # Aplica intensidad como mezcla con señal original
+            new_chunk[i] = (1 - intensity) * chunk[i] + intensity * new_amp
+        
+        # Manejo del último chunk (despadding)
+        valid_length = end - start
+        if chunk_idx == num_chunks - 1 and valid_length < chunk_size:
+            processed[start:end] = new_chunk[:valid_length] * max_val
+        else:
+            processed[start:start+chunk_size] = new_chunk * max_val
+    
+    return processed[:len(audio_data)]
+
 def quantum_modulation_enhanced(audio_data, sample_rate, intensity=0.5):
     max_val = np.max(np.abs(audio_data))
     if max_val == 0:
@@ -181,7 +250,7 @@ def main():
         
         # Aplicar efecto cuántico
         print("Procesando audio con efecto cuántico...")
-        processed_audio = quantum_modulation_enhanced(audio, sample_rate, intensity)
+        processed_audio = quantum_frqi_modulation(audio, sample_rate, intensity)
         
         # Guardar resultado
         write_wav_file(output_file, sample_rate, processed_audio)
