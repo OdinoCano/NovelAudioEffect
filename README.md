@@ -436,14 +436,6 @@ El resultado es un efecto auditivo que combina técnicas de procesamiento clási
 * Sensación de espacialidad y “chorus” cuántico cuando `intensity > 0.5`
 * Texturas sonoras complejas con “decodes” probabilísticas
 
----
-
-## 📄 Licencia
-
-Este proyecto está bajo licencia **MIT**. Revisa el archivo `LICENSE` para más detalles.
-
----
-
 ## 👤 Autor
 
 Proyecto creado por un entusiasta de la computación cuántica y el procesamiento de audio.
